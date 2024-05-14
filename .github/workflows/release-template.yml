@@ -1,0 +1,82 @@
+name: CI Pipeline Template
+
+parameters:
+  PROJETO: ''
+  SERVICO: ''
+  DEFAULT_APROVADOR_EMAIL: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      ORGANIZACAO: kdop
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set variables
+      run: |
+        echo "PROJETO=${{ github.event.inputs.PROJETO }}" >> $GITHUB_ENV
+        echo "SERVICO=${{ github.event.inputs.SERVICO }}" >> $GITHUB_ENV
+        echo "DEFAULT_APROVADOR_EMAIL=${{ github.event.inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
+
+    - name: Fetch last merged PR details
+      id: fetch_pr_details
+      run: |
+        PR_RESPONSE=$(gh pr list --repo ${{ github.repository }} --state merged --json number --jq '.[0]')
+        PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
+        
+        echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
+    - name: Fetch PR approver email
+      id: fetch_approver_email
+      run: |
+        REVIEWERS_RESPONSE=$(gh pr review --repo ${{ github.repository }} $PR_NUMBER --json user,state --jq '.[] | select(.state=="APPROVED") | .user.login')
+        
+        if [ -z "$REVIEWERS_RESPONSE" ]; then
+          APROVADOR_EMAIL="${DEFAULT_APROVADOR_EMAIL}"
+        else
+          APROVADOR_EMAIL=$(gh api --method GET "users/$REVIEWERS_RESPONSE" --jq '.email')
+        fi
+
+        echo "Aprovador utilizado: $APROVADOR_EMAIL"
+        echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
+
+    - name: Send information to ServiceNow
+      run: |
+        ENDPOINT="https://fgmrso3b56.execute-api.us-east-1.amazonaws.com/servicenow/release"
+        LINK_EXTERNO="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        PAYLOAD=$(cat <<EOF
+        {
+          "origemCriacao": "GitHub Actions",
+          "abertoPor": "${{ github.actor }}",
+          "aprovadoPor": "$APROVADOR_EMAIL",
+          "trem": "chatbot",
+          "grupo": "Projetos",
+          "classificacao": "Manutenção Corretiva",
+          "servico": "Pós-graduação",
+          "aplicativo": "Cosmos-ERP",
+          "itemConfiguracao": "$SERVICO",
+          "bu": "Cogna",
+          "origemRelease": "Outros",
+          "outros": "GitHub Actions",
+          "titulo": "Build ${{ github.run_id }}",
+          "descricao": "Descrição detalhada do build ${{ github.run_id }}",
+          "inicioReal": "${{ github.event.workflow_run.created_at }}",
+          "terminoReal": "${{ github.event.workflow_run.updated_at }}",
+          "fechamento": "Encerrada com sucesso",
+          "linkExterno": "$LINK_EXTERNO"
+        }
+        EOF
+        )
+
+        echo "Payload to be sent:"
+        echo "$PAYLOAD"
+
+        curl -X POST "$ENDPOINT" \
+             -H "Content-Type: application/json" \
+             -d "$PAYLOAD"
+
