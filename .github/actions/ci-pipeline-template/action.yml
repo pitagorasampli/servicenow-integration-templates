@@ -41,12 +41,14 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
-        REVIEWERS_RESPONSE=$(gh pr review --repo ${{ github.repository }} $PR_NUMBER --json user,state --jq '.[] | select(.state=="APPROVED") | .user.login')
-        
+        REVIEWERS_RESPONSE=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
+
         if [ -z "$REVIEWERS_RESPONSE" ]; then
           APROVADOR_EMAIL="${{ inputs.DEFAULT_APROVADOR_EMAIL }}"
         else
-          APROVADOR_EMAIL=$(gh api --method GET "users/$REVIEWERS_RESPONSE" --jq '.email')
+          APROVADOR_EMAIL=$(curl -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/users/$REVIEWERS_RESPONSE" | jq -r '.email')
         fi
 
         echo "Aprovador utilizado: $APROVADOR_EMAIL"
