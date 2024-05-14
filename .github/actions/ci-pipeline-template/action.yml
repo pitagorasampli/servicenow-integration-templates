@@ -1,26 +1,27 @@
-name: CI Pipeline Template
+# .github/actions/ci-pipeline-template/action.yml
 
-parameters:
-  PROJETO: ''
-  SERVICO: ''
-  DEFAULT_APROVADOR_EMAIL: ''
+name: 'CI Pipeline Template'
+description: 'A reusable action for CI pipeline'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+inputs:
+  PROJETO:
+    description: 'Nome do projeto'
+    required: true
+  SERVICO:
+    description: 'Nome do serviço'
+    required: true
+  DEFAULT_APROVADOR_EMAIL:
+    description: 'Email do aprovador padrão'
+    required: true
 
-    env:
-      ORGANIZACAO: kdop
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-
+runs:
+  using: 'composite'
+  steps:
     - name: Set variables
       run: |
-        echo "PROJETO=${{ github.event.inputs.PROJETO }}" >> $GITHUB_ENV
-        echo "SERVICO=${{ github.event.inputs.SERVICO }}" >> $GITHUB_ENV
-        echo "DEFAULT_APROVADOR_EMAIL=${{ github.event.inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
+        echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
+        echo "SERVICO=${{ inputs.SERVICO }}" >> $GITHUB_ENV
+        echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
 
     - name: Fetch last merged PR details
       id: fetch_pr_details
