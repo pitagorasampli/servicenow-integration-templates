@@ -11,6 +11,9 @@ inputs:
   DEFAULT_APROVADOR_EMAIL:
     description: 'Email do aprovador padrão'
     required: true
+  GH_TOKEN:
+    description: 'GitHub token'
+    required: true
 
 runs:
   using: 'composite'
@@ -25,7 +28,7 @@ runs:
     - name: Fetch last merged PR details
       id: fetch_pr_details
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
         PR_RESPONSE=$(gh pr list --repo ${{ github.repository }} --state merged --json number --jq '.[0]')
         PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
@@ -36,7 +39,7 @@ runs:
     - name: Fetch PR approver email
       id: fetch_approver_email
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
         REVIEWERS_RESPONSE=$(gh pr review --repo ${{ github.repository }} $PR_NUMBER --json user,state --jq '.[] | select(.state=="APPROVED") | .user.login')
         
