@@ -1,5 +1,3 @@
-# .github/actions/ci-pipeline-template/action.yml
-
 name: 'CI Pipeline Template'
 description: 'A reusable action for CI pipeline'
 
@@ -22,6 +20,7 @@ runs:
         echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
         echo "SERVICO=${{ inputs.SERVICO }}" >> $GITHUB_ENV
         echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
+      shell: bash
 
     - name: Fetch last merged PR details
       id: fetch_pr_details
@@ -30,6 +29,7 @@ runs:
         PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
         
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+      shell: bash
 
     - name: Fetch PR approver email
       id: fetch_approver_email
@@ -37,13 +37,14 @@ runs:
         REVIEWERS_RESPONSE=$(gh pr review --repo ${{ github.repository }} $PR_NUMBER --json user,state --jq '.[] | select(.state=="APPROVED") | .user.login')
         
         if [ -z "$REVIEWERS_RESPONSE" ]; then
-          APROVADOR_EMAIL="${DEFAULT_APROVADOR_EMAIL}"
+          APROVADOR_EMAIL="${{ inputs.DEFAULT_APROVADOR_EMAIL }}"
         else
           APROVADOR_EMAIL=$(gh api --method GET "users/$REVIEWERS_RESPONSE" --jq '.email')
         fi
 
         echo "Aprovador utilizado: $APROVADOR_EMAIL"
         echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
+      shell: bash
 
     - name: Send information to ServiceNow
       run: |
@@ -80,4 +81,5 @@ runs:
         curl -X POST "$ENDPOINT" \
              -H "Content-Type: application/json" \
              -d "$PAYLOAD"
+      shell: bash
 
