@@ -36,13 +36,13 @@ runs:
         
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
-    - name: Fetch PR approver emails and labels
-      id: fetch_approver_emails_and_labels
+    - name: Fetch PR approver logins and labels
+      id: fetch_approver_logins_and_labels
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
-        echo "Fetching PR approver emails and labels for PR number: $PR_NUMBER"
+        echo "Fetching PR approver logins and labels for PR number: $PR_NUMBER"
 
         # Fetch reviews for the PR
         REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
@@ -53,24 +53,14 @@ runs:
         # Process reviews to find the approvers
         APPROVER_LOGINS=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
 
-        # Initialize array for approver emails
-        APPROVER_EMAILS=()
-
         if [ -z "$APPROVER_LOGINS" ]; then
-          APPROVER_EMAILS+=("${{ inputs.DEFAULT_APROVADOR_EMAIL }}")
+          APPROVER_LOGINS="\"${{ inputs.DEFAULT_APROVADOR_EMAIL }}\""
         else
-          for login in $APPROVER_LOGINS; do
-            email=$(curl -H "Authorization: token $GH_TOKEN" \
-              "https://api.github.com/users/$login" | jq -r '.email')
-            APPROVER_EMAILS+=("$email")
-          done
+          APPROVER_LOGINS=$(echo "$APPROVER_LOGINS" | jq -R . | jq -s .)
         fi
 
-        # Convert array to JSON array format
-        APPROVER_EMAILS_JSON=$(printf '%s\n' "${APPROVER_EMAILS[@]}" | jq -R . | jq -s .)
-
-        echo "Aprovadores utilizados: $APPROVER_EMAILS_JSON"
-        echo "APROVADORES_EMAIL=$APPROVER_EMAILS_JSON" >> $GITHUB_ENV
+        echo "Aprovadores utilizados: $APPROVER_LOGINS"
+        echo "APROVADORES_EMAIL=$APPROVER_LOGINS" >> $GITHUB_ENV
 
         # Fetch labels for the PR
         LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
