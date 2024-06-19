@@ -15,128 +15,115 @@ inputs:
     description: 'GitHub token'
     required: true
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+runs:
+  using: 'composite'
+  steps:
+    - name: Set variables
+      shell: bash
+      run: |
+        echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
+        echo "SERVICO=${{ inputs.SERVICO }}" >> $GITHUB_ENV
+        echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
 
-jobs:
-  ci_pipeline:
-    runs-on: ubuntu-latest
+    - name: Fetch last merged PR details
+      id: fetch_pr_details
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+      run: |
+        PR_RESPONSE=$(gh pr list --repo ${{ github.repository }} --state merged --json number --jq '.[0]')
+        PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
+        
+        echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - name: Fetch PR approver email and labels
+      id: fetch_approver_email_and_labels
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+      run: |
+        echo "Fetching PR approver email and labels for PR number: $PR_NUMBER"
 
-      - name: Set variables
-        run: |
-          echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
-          echo "SERVICO=${{ inputs.SERVICO }}" >> $GITHUB_ENV
-          echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
-        shell: bash
+        # Fetch reviews for the PR
+        REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews")
+        
+        echo "Reviews fetched: $REVIEWS"
 
-      - name: Fetch last merged PR details
-        id: fetch_pr_details
-        env:
-          GH_TOKEN: ${{ inputs.GH_TOKEN }}
-        run: |
-          PR_RESPONSE=$(gh pr list --repo ${{ github.repository }} --state merged --json number --jq '.[0]')
-          PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
-          
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-        shell: bash
+        # Process reviews to find the approver
+        REVIEWERS_RESPONSE=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
 
-      - name: Fetch PR approver email and labels
-        id: fetch_approver_email_and_labels
-        env:
-          GH_TOKEN: ${{ inputs.GH_TOKEN }}
-        run: |
-          echo "Fetching PR approver email and labels for PR number: $PR_NUMBER"
+        if [ -z "$REVIEWERS_RESPONSE" ]; then
+          APROVADOR_EMAIL="${{ inputs.DEFAULT_APROVADOR_EMAIL }}"
+        else
+          APROVADOR_EMAIL=$(curl -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/users/$REVIEWERS_RESPONSE" | jq -r '.email')
+        fi
 
-          # Fetch reviews for the PR
-          REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews")
-          
-          echo "Reviews fetched: $REVIEWS"
+        echo "Aprovador utilizado: $APROVADOR_EMAIL"
+        echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
 
-          # Process reviews to find the approver
-          REVIEWERS_RESPONSE=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
+        # Fetch labels for the PR
+        LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels")
+        
+        TAGS=$(echo "$LABELS" | jq -r '.[].name' | tr '\n' ',' | sed 's/,$//')
 
-          if [ -z "$REVIEWERS_RESPONSE" ]; then
-            APROVADOR_EMAIL="${{ inputs.DEFAULT_APROVADOR_EMAIL }}"
-          else
-            APROVADOR_EMAIL=$(curl -H "Authorization: token $GH_TOKEN" \
-              "https://api.github.com/users/$REVIEWERS_RESPONSE" | jq -r '.email')
-          fi
+        echo "Labels fetched: $TAGS"
+        echo "TAGS=$TAGS" >> $GITHUB_ENV
 
-          echo "Aprovador utilizado: $APROVADOR_EMAIL"
-          echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
+    - name: Send information to ServiceNow
+      shell: bash
+      run: |
+        ENDPOINT="https://krotondev.service-now.com/api/kra/release/create"
+        LINK_EXTERNO="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          # Fetch labels for the PR
-          LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels")
-          
-          TAGS=$(echo "$LABELS" | jq -r '.[].name' | tr '\n' ',' | sed 's/,$//')
+        # Set default ORIGEM_RELEASE, INCIDENTE, and SOLICITACAO_SERVICO values
+        ORIGEM_RELEASE="Outros"
+        INCIDENTE=""
+        SOLICITACAO_SERVICO=""
 
-          echo "Labels fetched: $TAGS"
-          echo "TAGS=$TAGS" >> $GITHUB_ENV
-        shell: bash
+        # Check tags for incident or service request identifiers
+        if [[ $TAGS == *"INC"* ]]; then
+          INC_TAG=$(echo $TAGS | grep -o 'INC[0-9]*')
+          ORIGEM_RELEASE="Incidente"
+          INCIDENTE=$INC_TAG
+        elif [[ $TAGS == *"RITM"* ]]; then
+          RITM_TAG=$(echo $TAGS | grep -o 'RITM[0-9]*')
+          ORIGEM_RELEASE="Solicitação de Serviço"
+          SOLICITACAO_SERVICO=$RITM_TAG
+        fi
 
-      - name: Send information to ServiceNow
-        run: |
-          ENDPOINT="https://krotondev.service-now.com/api/kra/release/create"
-          LINK_EXTERNO="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        PAYLOAD=$(cat <<EOF
+        {
+          "origemCriacao": "GitHub Actions",
+          "abertoPor": "${{ github.actor }}",
+          "aprovadoPor": "$APROVADOR_EMAIL",
+          "trem": "chatbot",
+          "grupo": "Projetos",
+          "classificacao": "Manutenção Corretiva",
+          "servico": "Pós-graduação",
+          "aplicativo": "Cosmos-ERP",
+          "itemConfiguracao": "$SERVICO",
+          "bu": "Cogna",
+          "origemRelease": "$ORIGEM_RELEASE",
+          "incidente": "$INCIDENTE",
+          "solicitacaoServico": "$SOLICITACAO_SERVICO",
+          "outros": "GitHub Actions",
+          "titulo": "Build ${{ github.run_id }}",
+          "descricao": "Descrição detalhada do build ${{ github.run_id }}",
+          "inicioReal": "${{ github.event.workflow_run.created_at }}",
+          "terminoReal": "${{ github.event.workflow_run.updated_at }}",
+          "fechamento": "Encerrada com sucesso",
+          "linkExterno": "$LINK_EXTERNO"
+        }
+        EOF
+        )
 
-          # Set default ORIGEM_RELEASE, INCIDENTE, and SOLICITACAO_SERVICO values
-          ORIGEM_RELEASE="Outros"
-          INCIDENTE=""
-          SOLICITACAO_SERVICO=""
+        echo "Payload to be sent:"
+        echo "$PAYLOAD"
 
-          # Check tags for incident or service request identifiers
-          if [[ $TAGS == *"INC"* ]]; then
-            INC_TAG=$(echo $TAGS | grep -o 'INC[0-9]*')
-            ORIGEM_RELEASE="Incidente"
-            INCIDENTE=$INC_TAG
-          elif [[ $TAGS == *"RITM"* ]]; then
-            RITM_TAG=$(echo $TAGS | grep -o 'RITM[0-9]*')
-            ORIGEM_RELEASE="Solicitação de Serviço"
-            SOLICITACAO_SERVICO=$RITM_TAG
-          fi
-
-          PAYLOAD=$(cat <<EOF
-          {
-            "origemCriacao": "GitHub Actions",
-            "abertoPor": "${{ github.actor }}",
-            "aprovadoPor": "$APROVADOR_EMAIL",
-            "trem": "chatbot",
-            "grupo": "Projetos",
-            "classificacao": "Manutenção Corretiva",
-            "servico": "Pós-graduação",
-            "aplicativo": "Cosmos-ERP",
-            "itemConfiguracao": "$SERVICO",
-            "bu": "Cogna",
-            "origemRelease": "$ORIGEM_RELEASE",
-            "incidente": "$INCIDENTE",
-            "solicitacaoServico": "$SOLICITACAO_SERVICO",
-            "outros": "GitHub Actions",
-            "titulo": "Build ${{ github.run_id }}",
-            "descricao": "Descrição detalhada do build ${{ github.run_id }}",
-            "inicioReal": "${{ github.event.workflow_run.created_at }}",
-            "terminoReal": "${{ github.event.workflow_run.updated_at }}",
-            "fechamento": "Encerrada com sucesso",
-            "linkExterno": "$LINK_EXTERNO"
-          }
-          EOF
-          )
-
-          echo "Payload to be sent:"
-          echo "$PAYLOAD"
-
-          curl -X POST "$ENDPOINT" \
-               -H "Authorization: token $GH_TOKEN" \
-               -H "Content-Type: application/json" \
-               -d "$PAYLOAD"
-        shell: bash
+        curl -X POST "$ENDPOINT" \
+             -H "Authorization: token $GH_TOKEN" \
+             -H "Content-Type: application/json" \
+             -d "$PAYLOAD"
