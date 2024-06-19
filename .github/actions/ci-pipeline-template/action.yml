@@ -5,7 +5,7 @@ inputs:
   PROJETO:
     description: 'Nome do projeto'
     required: true
-  SERVICO:
+  ITEMCONFIGURACAO:
     description: 'Nome do serviço'
     required: true
   DEFAULT_APROVADOR_EMAIL:
@@ -22,7 +22,7 @@ runs:
       shell: bash
       run: |
         echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
-        echo "SERVICO=${{ inputs.SERVICO }}" >> $GITHUB_ENV
+        echo "SERVICO=${{ inputs.ITEMCONFIGURACAO }}" >> $GITHUB_ENV
         echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
 
     - name: Fetch last merged PR details
