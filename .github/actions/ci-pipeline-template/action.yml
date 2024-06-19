@@ -51,12 +51,13 @@ runs:
         echo "Reviews fetched: $REVIEWS"
 
         # Process reviews to find the approvers
-        APPROVER_LOGINS=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
+        APPROVER_LOGINS=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login' | paste -sd ',' -)
 
         if [ -z "$APPROVER_LOGINS" ]; then
           APPROVER_LOGINS="\"${{ inputs.DEFAULT_APROVADOR_EMAIL }}\""
         else
-          APPROVER_LOGINS=$(echo "$APPROVER_LOGINS" | jq -R . | jq -s .)
+          APPROVER_LOGINS=$(echo "$APPROVER_LOGINS" | sed 's/,/","/g')
+          APPROVER_LOGINS="\"$APPROVER_LOGINS\""
         fi
 
         echo "Aprovadores utilizados: $APPROVER_LOGINS"
@@ -98,7 +99,7 @@ runs:
         {
           "origemCriacao": "GitHub Actions",
           "abertoPor": "${{ github.actor }}",
-          "aprovadoPor": $APROVADORES_EMAIL,
+          "aprovadoPor": [$APROVADORES_EMAIL],
           "trem": "chatbot",
           "grupo": "Projetos",
           "classificacao": "Manutenção Corretiva",
