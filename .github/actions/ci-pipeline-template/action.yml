@@ -36,12 +36,12 @@ runs:
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
       shell: bash
 
-    - name: Fetch PR approver email
-      id: fetch_approver_email
+    - name: Fetch PR approver email and labels
+      id: fetch_approver_email_and_labels
       env:
         GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
-        echo "Fetching PR approver email for PR number: $PR_NUMBER"
+        echo "Fetching PR approver email and labels for PR number: $PR_NUMBER"
 
         # Fetch reviews for the PR
         REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
@@ -61,12 +61,37 @@ runs:
 
         echo "Aprovador utilizado: $APROVADOR_EMAIL"
         echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
+
+        # Fetch labels for the PR
+        LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels")
+        
+        TAGS=$(echo "$LABELS" | jq -r '.[].name' | tr '\n' ',' | sed 's/,$//')
+
+        echo "Labels fetched: $TAGS"
+        echo "TAGS=$TAGS" >> $GITHUB_ENV
       shell: bash
 
     - name: Send information to ServiceNow
       run: |
-        ENDPOINT="https://fgmrso3b56.execute-api.us-east-1.amazonaws.com/servicenow/release"
+        ENDPOINT="https://krotondev.service-now.com/api/kra/release/create"
         LINK_EXTERNO="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        # Set default ORIGEM_RELEASE, INCIDENTE, and SOLICITACAO_SERVICO values
+        ORIGEM_RELEASE="Outros"
+        INCIDENTE=""
+        SOLICITACAO_SERVICO=""
+
+        # Check tags for incident or service request identifiers
+        if [[ $TAGS == *"INC"* ]]; then
+          INC_TAG=$(echo $TAGS | grep -o 'INC[0-9]*')
+          ORIGEM_RELEASE="Incidente"
+          INCIDENTE=$INC_TAG
+        elif [[ $TAGS == *"RITM"* ]]; then
+          RITM_TAG=$(echo $TAGS | grep -o 'RITM[0-9]*')
+          ORIGEM_RELEASE="Solicitação de Serviço"
+          SOLICITACAO_SERVICO=$RITM_TAG
+        fi
 
         PAYLOAD=$(cat <<EOF
         {
@@ -80,7 +105,9 @@ runs:
           "aplicativo": "Cosmos-ERP",
           "itemConfiguracao": "$SERVICO",
           "bu": "Cogna",
-          "origemRelease": "Outros",
+          "origemRelease": "$ORIGEM_RELEASE",
+          "incidente": "$INCIDENTE",
+          "solicitacaoServico": "$SOLICITACAO_SERVICO",
           "outros": "GitHub Actions",
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
@@ -99,4 +126,3 @@ runs:
              -H "Content-Type: application/json" \
              -d "$PAYLOAD"
       shell: bash
-
