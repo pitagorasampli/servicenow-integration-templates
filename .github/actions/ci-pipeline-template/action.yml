@@ -36,13 +36,13 @@ runs:
         
         echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
-    - name: Fetch PR approver email and labels
-      id: fetch_approver_email_and_labels
+    - name: Fetch PR approver emails and labels
+      id: fetch_approver_emails_and_labels
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.GH_TOKEN }}
       run: |
-        echo "Fetching PR approver email and labels for PR number: $PR_NUMBER"
+        echo "Fetching PR approver emails and labels for PR number: $PR_NUMBER"
 
         # Fetch reviews for the PR
         REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
@@ -50,18 +50,27 @@ runs:
         
         echo "Reviews fetched: $REVIEWS"
 
-        # Process reviews to find the approver
-        REVIEWERS_RESPONSE=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
+        # Process reviews to find the approvers
+        APPROVER_LOGINS=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login')
 
-        if [ -z "$REVIEWERS_RESPONSE" ]; then
-          APROVADOR_EMAIL="${{ inputs.DEFAULT_APROVADOR_EMAIL }}"
+        # Initialize array for approver emails
+        APPROVER_EMAILS=()
+
+        if [ -z "$APPROVER_LOGINS" ]; then
+          APPROVER_EMAILS+=("${{ inputs.DEFAULT_APROVADOR_EMAIL }}")
         else
-          APROVADOR_EMAIL=$(curl -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/users/$REVIEWERS_RESPONSE" | jq -r '.email')
+          for login in $APPROVER_LOGINS; do
+            email=$(curl -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/users/$login" | jq -r '.email')
+            APPROVER_EMAILS+=("$email")
+          done
         fi
 
-        echo "Aprovador utilizado: $APROVADOR_EMAIL"
-        echo "APROVADOR_EMAIL=$APROVADOR_EMAIL" >> $GITHUB_ENV
+        # Convert array to JSON array format
+        APPROVER_EMAILS_JSON=$(printf '%s\n' "${APPROVER_EMAILS[@]}" | jq -R . | jq -s .)
+
+        echo "Aprovadores utilizados: $APPROVER_EMAILS_JSON"
+        echo "APROVADORES_EMAIL=$APPROVER_EMAILS_JSON" >> $GITHUB_ENV
 
         # Fetch labels for the PR
         LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
@@ -99,7 +108,7 @@ runs:
         {
           "origemCriacao": "GitHub Actions",
           "abertoPor": "${{ github.actor }}",
-          "aprovadoPor": "$APROVADOR_EMAIL",
+          "aprovadoPor": $APROVADORES_EMAIL,
           "trem": "chatbot",
           "grupo": "Projetos",
           "classificacao": "Manutenção Corretiva",
