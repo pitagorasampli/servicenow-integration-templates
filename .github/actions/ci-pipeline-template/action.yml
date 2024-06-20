@@ -79,12 +79,14 @@ runs:
         LINK_EXTERNO="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         AUTH="YXBpLnVzZXI6MTpNd28tWzpxWHR7bC4/R311QyQ0MCxNam9XOTVqeHZebl0peDNsPw=="
 
-        # Set default ORIGEM_RELEASE, INCIDENTE, and SOLICITACAO_SERVICO values
+        # Set default ORIGEM_RELEASE, INCIDENTE, SOLICITACAO_SERVICO, PROBLEMA, and DEMANDA values
         ORIGEM_RELEASE="Outros"
         INCIDENTE=""
         SOLICITACAO_SERVICO=""
+        PROBLEMA=""
+        DEMANDA=""
 
-        # Check tags for incident or service request identifiers
+        # Check tags for incident, service request, problem or demand identifiers
         if [[ $TAGS == *"INC"* ]]; then
           INC_TAG=$(echo $TAGS | grep -o 'INC[0-9]*')
           ORIGEM_RELEASE="Incidente"
@@ -93,6 +95,14 @@ runs:
           RITM_TAG=$(echo $TAGS | grep -o 'RITM[0-9]*')
           ORIGEM_RELEASE="Solicitação de Serviço"
           SOLICITACAO_SERVICO=$RITM_TAG
+        elif [[ $TAGS == *"PROB"* ]]; then
+          PROB_TAG=$(echo $TAGS | grep -o 'PROB[0-9]*')
+          ORIGEM_RELEASE="Problema"
+          PROBLEMA=$PROB_TAG
+        elif [[ $TAGS == *"Demanda"* || $TAGS == *"demanda"* ]]; then
+          DEMANDA_TAG=$(echo $TAGS | grep -o 'Demanda[0-9A-Za-z]*')
+          ORIGEM_RELEASE="Demanda"
+          DEMANDA=$DEMANDA_TAG
         fi
 
         PAYLOAD=$(cat <<EOF
@@ -103,13 +113,13 @@ runs:
           "trem": "chatbot",
           "grupo": "Projetos",
           "classificacao": "Manutenção Corretiva",
-          "servico": "Pós-graduação",
-          "aplicativo": "Cosmos-ERP",
           "itemConfiguracao": "$SERVICO",
           "bu": "Cogna",
           "origemRelease": "$ORIGEM_RELEASE",
           "incidente": "$INCIDENTE",
           "solicitacaoServico": "$SOLICITACAO_SERVICO",
+          "problema": "$PROBLEMA",
+          "demanda": "$DEMANDA",
           "outros": "GitHub Actions",
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
