@@ -85,29 +85,34 @@ runs:
         SOLICITACAO_SERVICO=""
         PROBLEMA=""
         DEMANDA=""
+        OUTROS="Outros"
 
         # Check tags for incident, service request, problem or demand identifiers
         if [[ $TAGS == *"INC"* ]]; then
           INC_TAG=$(echo $TAGS | grep -o 'INC[0-9]*')
           ORIGEM_RELEASE="Incidente"
           INCIDENTE=$INC_TAG
+          OUTROS=""
         elif [[ $TAGS == *"RITM"* ]]; then
           RITM_TAG=$(echo $TAGS | grep -o 'RITM[0-9]*')
           ORIGEM_RELEASE="Solicitação de Serviço"
           SOLICITACAO_SERVICO=$RITM_TAG
+          OUTROS=""
         elif [[ $TAGS == *"PROB"* ]]; then
           PROB_TAG=$(echo $TAGS | grep -o 'PROB[0-9]*')
           ORIGEM_RELEASE="Problema"
           PROBLEMA=$PROB_TAG
+          OUTROS=""
         elif [[ $TAGS == *"Demanda"* || $TAGS == *"demanda"* ]]; then
           DEMANDA_TAG=$(echo $TAGS | grep -o 'Demanda[0-9A-Za-z]*')
           ORIGEM_RELEASE="Demanda"
           DEMANDA=$DEMANDA_TAG
+          OUTROS=""
         fi
 
         PAYLOAD=$(cat <<EOF
         {
-          "origemCriacao": "GitHub Actions",
+          "origemCriacao": "GitHub",
           "abertoPor": "${{ github.actor }}",
           "aprovadoPor": [$APROVADORES_EMAIL],
           "trem": "chatbot",
@@ -120,7 +125,7 @@ runs:
           "solicitacaoServico": "$SOLICITACAO_SERVICO",
           "problema": "$PROBLEMA",
           "demanda": "$DEMANDA",
-          "outros": "GitHub Actions",
+          "outros": "$OUTROS",
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
           "inicioReal": "${{ github.event.workflow_run.created_at }}",
