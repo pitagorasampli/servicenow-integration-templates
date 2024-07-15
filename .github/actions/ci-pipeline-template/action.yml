@@ -133,7 +133,7 @@ runs:
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
           "inicioReal": "${{ github.event.workflow_run.created_at }}",
-          "terminoReal": "${{ github.event.workflow_run.updated_at }}",
+          "terminoReal": "${{ github.event.workflow_run.created_at }}",
           "fechamento": "Encerrada com sucesso",
           "linkExterno": "$LINK_EXTERNO"
         }
