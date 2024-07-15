@@ -2,8 +2,11 @@ name: 'CI Pipeline Template'
 description: 'A reusable action for CI pipeline'
 
 inputs:
-  PROJETO:
-    description: 'Nome do projeto'
+  TREM:
+    description: 'Nome do trem'
+    required: true
+  GRUPO:
+    description: 'Nome do grupo'
     required: true
   ITEMCONFIGURACAO:
     description: 'Nome do serviço'
@@ -21,7 +24,8 @@ runs:
     - name: Set variables
       shell: bash
       run: |
-        echo "PROJETO=${{ inputs.PROJETO }}" >> $GITHUB_ENV
+        echo "TREM=${{ inputs.TREM }}" >> $GITHUB_ENV
+        echo "GRUPO=${{ inputs.GRUPO }}" >> $GITHUB_ENV
         echo "SERVICO=${{ inputs.ITEMCONFIGURACAO }}" >> $GITHUB_ENV
         echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
 
@@ -115,8 +119,8 @@ runs:
           "origemCriacao": "GitHub",
           "abertoPor": "${{ github.actor }}",
           "aprovadoPor": [$APROVADORES_EMAIL],
-          "trem": "chatbot",
-          "grupo": "Projetos",
+          "trem": "${{ inputs.TREM }}",
+          "grupo": "${{ inputs.GRUPO }}",
           "classificacao": "Manutenção Corretiva",
           "itemConfiguracao": "$SERVICO",
           "bu": "Cogna",
