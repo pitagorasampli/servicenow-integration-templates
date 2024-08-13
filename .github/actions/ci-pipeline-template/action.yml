@@ -114,6 +114,9 @@ runs:
           OUTROS=""
         fi
 
+        # Get the current time in São Paulo timezone
+        SAO_PAULO_TIME=$(TZ="America/Sao_Paulo" date +"%Y-%m-%dT%H:%M:%S")
+
         PAYLOAD=$(cat <<EOF
         {
           "origemCriacao": "GitHub",
@@ -132,8 +135,8 @@ runs:
           "outros": "$OUTROS",
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
-          "inicioReal": "${{ github.event.workflow_run.created_at }}",
-          "terminoReal": "${{ github.event.workflow_run.created_at }}",
+          "inicioReal": "$SAO_PAULO_TIME",
+          "terminoReal": "$SAO_PAULO_TIME",
           "fechamento": "Encerrada com sucesso",
           "linkExterno": "$LINK_EXTERNO"
         }
