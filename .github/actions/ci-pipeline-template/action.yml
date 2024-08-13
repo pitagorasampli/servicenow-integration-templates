@@ -21,6 +21,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Set start time
+      shell: bash
+      run: |
+        START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+        echo "START_TIME=$START_TIME" >> $GITHUB_ENV
+        echo "Script started at: $START_TIME"
+
     - name: Set variables
       shell: bash
       run: |
@@ -135,7 +142,7 @@ runs:
           "outros": "$OUTROS",
           "titulo": "Build ${{ github.run_id }}",
           "descricao": "Descrição detalhada do build ${{ github.run_id }}",
-          "inicioReal": "$SAO_PAULO_TIME",
+          "inicioReal": "$START_TIME",
           "terminoReal": "$SAO_PAULO_TIME",
           "fechamento": "Encerrada com sucesso",
           "linkExterno": "$LINK_EXTERNO"
@@ -151,3 +158,21 @@ runs:
              -H "Content-Type: application/json" \
              -d "$PAYLOAD"
 
+    - name: Set end time and calculate duration
+      shell: bash
+      run: |
+        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+        START_TIME=$(echo $START_TIME)
+        echo "Script finished at: $END_TIME"
+
+        # Calculate the duration
+        START_TIMESTAMP=$(date -d "$START_TIME" +%s)
+        END_TIMESTAMP=$(date -d "$END_TIME" +%s)
+        DURATION=$((END_TIMESTAMP - START_TIMESTAMP))
+
+        # Convert duration to hours, minutes, and seconds
+        HOURS=$((DURATION / 3600))
+        MINUTES=$(((DURATION % 3600) / 60))
+        SECONDS=$((DURATION % 60))
+
+        echo "Total duration: ${HOURS}h ${MINUTES}m ${SECONDS}s"
