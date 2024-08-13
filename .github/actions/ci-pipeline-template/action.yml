@@ -1,3 +1,81 @@
+name: 'CI Pipeline Template'
+description: 'A reusable action for CI pipeline'
+
+inputs:
+  TREM:
+    description: 'Nome do trem'
+    required: true
+  GRUPO:
+    description: 'Nome do grupo'
+    required: true
+  ITEMCONFIGURACAO:
+    description: 'Nome do serviço'
+    required: true
+  DEFAULT_APROVADOR_EMAIL:
+    description: 'Email do aprovador padrão'
+    required: true
+  GH_TOKEN:
+    description: 'GitHub token'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set variables
+      shell: bash
+      run: |
+        echo "TREM=${{ inputs.TREM }}" >> $GITHUB_ENV
+        echo "GRUPO=${{ inputs.GRUPO }}" >> $GITHUB_ENV
+        echo "SERVICO=${{ inputs.ITEMCONFIGURACAO }}" >> $GITHUB_ENV
+        echo "DEFAULT_APROVADOR_EMAIL=${{ inputs.DEFAULT_APROVADOR_EMAIL }}" >> $GITHUB_ENV
+
+    - name: Fetch last merged PR details
+      id: fetch_pr_details
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+      run: |
+        PR_RESPONSE=$(gh pr list --repo ${{ github.repository }} --state merged --json number --jq '.[0]')
+        PR_NUMBER=$(echo $PR_RESPONSE | jq -r '.number')
+        
+        echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
+    - name: Fetch PR approver logins and labels
+      id: fetch_approver_logins_and_labels
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+      run: |
+        echo "Fetching PR approver logins and labels for PR number: $PR_NUMBER"
+
+        # Fetch reviews for the PR
+        REVIEWS=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews")
+        
+        echo "Reviews fetched: $REVIEWS"
+
+        # Process reviews to find the approvers
+        APPROVER_LOGINS=$(echo "$REVIEWS" | jq -r '.[] | select(.state=="APPROVED") | .user.login' | paste -sd ',' -)
+
+        if [ -z "$APPROVER_LOGINS" ]; then
+          APPROVER_LOGINS="\"${{ inputs.DEFAULT_APROVADOR_EMAIL }}\""
+        else
+          APPROVER_LOGINS=$(echo "$APPROVER_LOGINS" | sed 's/,/","/g')
+          APPROVER_LOGINS="\"$APPROVER_LOGINS\""
+        fi
+
+        echo "Aprovadores utilizados: $APPROVER_LOGINS"
+        echo "APROVADORES_EMAIL=$APPROVER_LOGINS" >> $GITHUB_ENV
+
+        # Fetch labels for the PR
+        LABELS=$(curl -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels")
+        
+        TAGS=$(echo "$LABELS" | jq -r '.[].name' | tr '\n' ',' | sed 's/,$//')
+
+        echo "Labels fetched: $TAGS"
+        echo "TAGS=$TAGS" >> $GITHUB_ENV
+
     - name: Send information to ServiceNow
       shell: bash
       run: |
@@ -72,3 +150,4 @@
              -H "Authorization: Basic $AUTH" \
              -H "Content-Type: application/json" \
              -d "$PAYLOAD"
+
